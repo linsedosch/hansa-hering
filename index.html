@@ -2,32 +2,43 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000a1a">
 <title>Hansa Hering 🐟</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
-  body {
+  html, body {
     background: #000a1a;
+    width: 100%; height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+  }
+  body {
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    height: 100vh;
     font-family: 'Press Start 2P', monospace;
-    overflow: hidden;
   }
   #title-bar {
     font-size: 13px; color: #fff;
     text-shadow: 0 0 10px #0055bb, 0 0 20px #0055bb;
     margin-bottom: 6px; letter-spacing: 2px;
+    flex-shrink: 0;
   }
   #title-bar span.r { color: #ee2222; text-shadow: 0 0 10px #ee2222; }
   #title-bar span.b { color: #4499ff; text-shadow: 0 0 10px #4499ff; }
+  @media (max-height: 640px) { #title-bar { display: none; } }
   #game-container {
     position: relative; width: 400px; height: 580px;
     overflow: hidden;
     border: 4px solid #0044cc;
     box-shadow: 0 0 20px #0044cc, 0 0 50px #001a55, inset 0 0 15px rgba(0,50,150,0.3);
     image-rendering: pixelated;
+    transform-origin: top center;
+    flex-shrink: 0;
   }
   canvas { display: block; image-rendering: pixelated; }
   #ui {
@@ -767,6 +778,25 @@ document.getElementById('game-container').addEventListener('touchstart',e=>{
   if(document.getElementById('nameInput')===document.activeElement) return;
   e.preventDefault(); jump();
 },{passive:false});
+
+// ---- MOBILE RESPONSIVE SCALING ----
+function scaleGame() {
+  const container = document.getElementById('game-container');
+  const titleBar = document.getElementById('title-bar');
+  const titleH = titleBar ? titleBar.offsetHeight + 6 : 26;
+  const availW = window.innerWidth;
+  const availH = window.innerHeight - titleH - 8;
+  const scaleX = availW / 408; // 400 + 8px border
+  const scaleY = availH / 588; // 580 + 8px border
+  const scale = Math.min(scaleX, scaleY, 1); // never upscale on desktop
+  container.style.transform = `scale(${scale})`;
+  // adjust body so scaled container doesn't overflow
+  document.body.style.justifyContent = scale < 1 ? 'flex-start' : 'center';
+  container.style.marginTop = scale < 1 ? `${titleH}px` : '';
+}
+scaleGame();
+window.addEventListener('resize', scaleGame);
+window.addEventListener('orientationchange', ()=>setTimeout(scaleGame, 200));
 
 loadHymne();
 if(imagesReady>=2) showCharSelect();
