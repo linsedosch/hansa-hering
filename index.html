@@ -206,23 +206,47 @@ function playHansaFanfare() {
     setTimeout(()=>playBeep(f,0.12,'square',0.15),t*1000));
 }
 
-// ---- HIGHSCORES ----
-function loadHighscores() {
-  try { return JSON.parse(localStorage.getItem('hansa_hs')||'[]'); } catch(e) { return []; }
+// ---- HIGHSCORES (global via JSONBin) ----
+const BIN_ID='69b541a1c3097a1dd52459c3';
+const BIN_KEY='$2a$10$0Xjlmnh3ksJ0aReQaBl0GOGq04W5aV9I7ciwio3MBUhnNCk7RfT6G';
+const BIN_URL=`https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
+async function loadHighscores() {
+  try {
+    const res=await fetch(BIN_URL+'/latest',{headers:{'X-Access-Key':BIN_KEY}});
+    const data=await res.json();
+    const list=data.record.scores||[];
+    localStorage.setItem('hansa_hs',JSON.stringify(list)); // local cache
+    return list;
+  } catch(e) {
+    try { return JSON.parse(localStorage.getItem('hansa_hs')||'[]'); } catch(e2) { return []; }
+  }
 }
-function saveHighscores(list) {
-  try { localStorage.setItem('hansa_hs',JSON.stringify(list)); } catch(e) {}
+
+async function saveHighscores(list) {
+  try {
+    await fetch(BIN_URL,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Access-Key':BIN_KEY},
+      body:JSON.stringify({scores:list})
+    });
+    localStorage.setItem('hansa_hs',JSON.stringify(list));
+  } catch(e) {
+    try { localStorage.setItem('hansa_hs',JSON.stringify(list)); } catch(e2) {}
+  }
 }
-function isTop5(pts) {
-  const list=loadHighscores();
-  return list.length<5 || pts>list[list.length-1].pts;
+
+async function isTop5(pts) {
+  const list=await loadHighscores();
+  return list.length<10 || pts>list[list.length-1].pts;
 }
-function addHighscore(name,pts,fish) {
-  const list=loadHighscores();
+
+async function addHighscore(name,pts,fish) {
+  const list=await loadHighscores();
   list.push({name:name||'???',pts,fish,date:new Date().toLocaleDateString('de-DE')});
   list.sort((a,b)=>b.pts-a.pts);
-  list.splice(5);
-  saveHighscores(list);
+  list.splice(10);
+  await saveHighscores(list);
   return list;
 }
 
@@ -591,10 +615,11 @@ function update() {
     spawnParticles(player.x,player.y,['#ee2222','#ffffff','#0055dd'],20);
     playDeath();
     inputBlocked=true;
-    setTimeout(()=>{
+    setTimeout(async()=>{
       inputBlocked=false;
-      if(isTop5(score)) showNameInput();
-      else showGameOver(loadHighscores(), null);
+      const top=await isTop5(score);
+      if(top) showNameInput();
+      else showGameOver(await loadHighscores(), null);
     },2000);
   }
 }
@@ -645,13 +670,16 @@ function showNameInput() {
   // Auto-focus input (slight delay for mobile)
   setTimeout(()=>input.focus(),100);
 
-  const save=()=>{
+  const save=async()=>{
     const name=(input.value.trim()||'???').substring(0,10).toUpperCase();
-    const list=addHighscore(name,score,heringsCaught);
+    saveBtn.disabled=true;
+    saveBtn.textContent='⏳ SPEICHERN...';
+    const list=await addHighscore(name,score,heringsCaught);
     showGameOver(list,score);
   };
 
   saveBtn.addEventListener('click',e=>{e.stopPropagation();save();});
+  saveBtn.addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();save();},{passive:false});
   input.addEventListener('keydown',e=>{
     e.stopPropagation();
     if(e.code==='Enter') save();
@@ -670,7 +698,7 @@ function showGameOver(hsList,highlightPts) {
       TORE: ${score} ${newRecord?'🏆':''}
     </div>
     <div style="font-size:8px;color:#88aadd;margin-bottom:6px">🐟 HERINGE: ${heringsCaught}</div>
-    <div style="font-size:7px;color:#4499ff;margin-bottom:2px;text-shadow:0 0 6px #4499ff">— TOP 5 —</div>
+    <div style="font-size:7px;color:#4499ff;margin-bottom:2px;text-shadow:0 0 6px #4499ff">— TOP 10 GLOBAL —</div>
     ${renderHSTable(hsList,highlightPts)}
     <button class="btn" id="restartBtn" style="margin-top:6px">↩ NOCHMAL!</button>
     <button class="btn" id="charBtn" style="font-size:8px;border-color:#004499;box-shadow:0 0 8px #003388;animation:none">🔄 CHARAKTER</button>
