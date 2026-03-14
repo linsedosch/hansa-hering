@@ -238,13 +238,21 @@ async function saveHighscores(list) {
 
 async function isTop5(pts) {
   const list=await loadHighscores();
-  return list.length<10 || pts>list[list.length-1].pts;
+  return list.length<10 || pts>list[list.length-1].best;
 }
 
 async function addHighscore(name,pts,fish) {
   const list=await loadHighscores();
-  list.push({name:name||'???',pts,fish,date:new Date().toLocaleDateString('de-DE')});
-  list.sort((a,b)=>b.pts-a.pts);
+  const existing=list.find(e=>e.name===name);
+  if(existing) {
+    existing.games++;
+    existing.totalPts=(existing.totalPts||existing.best)+pts;
+    existing.avg=Math.round(existing.totalPts/existing.games*10)/10;
+    if(pts>existing.best){ existing.best=pts; existing.fish=fish; existing.date=new Date().toLocaleDateString('de-DE'); }
+  } else {
+    list.push({name,best:pts,avg:pts,totalPts:pts,games:1,fish,date:new Date().toLocaleDateString('de-DE')});
+  }
+  list.sort((a,b)=>b.best-a.best);
   list.splice(10);
   await saveHighscores(list);
   return list;
@@ -633,21 +641,22 @@ function draw() {
 }
 
 // ---- HIGHSCORE TABLE HTML ----
-function renderHSTable(list,highlightPts) {
+function renderHSTable(list,highlightName) {
   if(!list||list.length===0) return '<div style="font-size:7px;color:#445566;margin:6px 0">Noch kein Eintrag</div>';
   let rows='';
-  let highlighted=false;
   list.forEach((e,i)=>{
-    const isNew=!highlighted&&e.pts===highlightPts;
-    if(isNew) highlighted=true;
+    const isNew=e.name===highlightName;
     rows+=`<tr>
       <td class="hs-rank">#${i+1}</td>
       <td class="hs-name ${isNew?'hs-new':''}">${e.name}</td>
-      <td class="hs-pts ${isNew?'hs-new':''}">${e.pts}</td>
-      <td class="hs-fish">🐟${e.fish}</td>
+      <td class="hs-pts ${isNew?'hs-new':''}" title="Bestes Spiel">🏆${e.best}</td>
+      <td class="hs-pts" style="color:#88aadd" title="Durchschnitt">⌀${e.avg}</td>
+      <td class="hs-fish" title="Spiele">🎮${e.games}</td>
     </tr>`;
   });
-  return `<table class="hs-table">${rows}</table>`;
+  return `
+    <div style="font-size:6px;color:#445566;margin-bottom:3px">🏆 BEST &nbsp;⌀ AVG &nbsp;🎮 SPIELE</div>
+    <table class="hs-table">${rows}</table>`;
 }
 
 // ---- NAME INPUT SCREEN ----
@@ -675,7 +684,7 @@ function showNameInput() {
     saveBtn.disabled=true;
     saveBtn.textContent='⏳ SPEICHERN...';
     const list=await addHighscore(name,score,heringsCaught);
-    showGameOver(list,score);
+    showGameOver(list,name);
   };
 
   saveBtn.addEventListener('click',e=>{e.stopPropagation();save();});
@@ -689,7 +698,7 @@ function showNameInput() {
 }
 
 // ---- GAME OVER ----
-function showGameOver(hsList,highlightPts) {
+function showGameOver(hsList,highlightName) {
   const ov=document.getElementById('overlay');
   const newRecord=score>=hiScore&&score>0;
   ov.innerHTML=`
@@ -699,7 +708,7 @@ function showGameOver(hsList,highlightPts) {
     </div>
     <div style="font-size:8px;color:#88aadd;margin-bottom:6px">🐟 HERINGE: ${heringsCaught}</div>
     <div style="font-size:7px;color:#4499ff;margin-bottom:2px;text-shadow:0 0 6px #4499ff">— TOP 10 GLOBAL —</div>
-    ${renderHSTable(hsList,highlightPts)}
+    ${renderHSTable(hsList,highlightName)}
     <button class="btn" id="restartBtn" style="margin-top:6px">↩ NOCHMAL!</button>
     <button class="btn" id="charBtn" style="font-size:8px;border-color:#004499;box-shadow:0 0 8px #003388;animation:none">🔄 CHARAKTER</button>
     <div style="font-size:6px;color:#334455;margin-top:4px">LEERTASTE / KLICK</div>
