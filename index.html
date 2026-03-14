@@ -238,17 +238,20 @@ async function saveHighscores(list) {
 
 async function isTop5(pts) {
   const list=await loadHighscores();
-  return list.length<10 || pts>list[list.length-1].best;
+  return list.length<10 || pts>(list[list.length-1].best??list[list.length-1].pts??0);
 }
 
 async function addHighscore(name,pts,fish) {
   const list=await loadHighscores();
   const existing=list.find(e=>e.name===name);
   if(existing) {
-    existing.games++;
-    existing.totalPts=(existing.totalPts||existing.best)+pts;
+    existing.games=(existing.games??1)+1;
+    const prevBest=existing.best??existing.pts??0;
+    existing.totalPts=(existing.totalPts??prevBest)+pts;
     existing.avg=Math.round(existing.totalPts/existing.games*10)/10;
-    if(pts>existing.best){ existing.best=pts; existing.fish=fish; existing.date=new Date().toLocaleDateString('de-DE'); }
+    if(pts>prevBest){ existing.best=pts; existing.fish=fish; existing.date=new Date().toLocaleDateString('de-DE'); }
+    else { existing.best=prevBest; }
+    delete existing.pts; // migrate old field
   } else {
     list.push({name,best:pts,avg:pts,totalPts:pts,games:1,fish,date:new Date().toLocaleDateString('de-DE')});
   }
@@ -646,12 +649,15 @@ function renderHSTable(list,highlightName) {
   let rows='';
   list.forEach((e,i)=>{
     const isNew=e.name===highlightName;
+    const best=e.best??e.pts??'?';
+    const avg=e.avg??e.pts??'?';
+    const games=e.games??1;
     rows+=`<tr>
       <td class="hs-rank">#${i+1}</td>
       <td class="hs-name ${isNew?'hs-new':''}">${e.name}</td>
-      <td class="hs-pts ${isNew?'hs-new':''}" title="Bestes Spiel">🏆${e.best}</td>
-      <td class="hs-pts" style="color:#88aadd" title="Durchschnitt">⌀${e.avg}</td>
-      <td class="hs-fish" title="Spiele">🎮${e.games}</td>
+      <td class="hs-pts ${isNew?'hs-new':''}" title="Bestes Spiel">🏆${best}</td>
+      <td class="hs-pts" style="color:#88aadd" title="Durchschnitt">⌀${avg}</td>
+      <td class="hs-fish" title="Spiele">🎮${games}</td>
     </tr>`;
   });
   return `
