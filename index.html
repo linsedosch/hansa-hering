@@ -677,8 +677,12 @@ function showGameOver(hsList,highlightPts) {
     <div style="font-size:6px;color:#334455;margin-top:4px">LEERTASTE / KLICK</div>
   `;
   ov.style.display='flex';
-  document.getElementById('restartBtn').addEventListener('click',e=>{e.stopPropagation();if(!inputBlocked)startGame();});
-  document.getElementById('charBtn').addEventListener('click',e=>{e.stopPropagation();if(!inputBlocked)showCharSelect();});
+  const restartBtn=document.getElementById('restartBtn');
+  restartBtn.addEventListener('click',e=>{e.stopPropagation();if(!inputBlocked)startGame();});
+  restartBtn.addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();if(!inputBlocked)startGame();},{passive:false});
+  const charBtn=document.getElementById('charBtn');
+  charBtn.addEventListener('click',e=>{e.stopPropagation();if(!inputBlocked)showCharSelect();});
+  charBtn.addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();if(!inputBlocked)showCharSelect();},{passive:false});
 }
 
 // ---- CHAR SELECT ----
