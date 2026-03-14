@@ -656,12 +656,9 @@ function renderHSTable(list,highlightName) {
       <td class="hs-rank">#${i+1}</td>
       <td class="hs-name ${isNew?'hs-new':''}">${e.name}</td>
       <td class="hs-pts ${isNew?'hs-new':''}" title="Bestes Spiel">🏆${best}</td>
-      <td class="hs-pts" style="color:#88aadd" title="Durchschnitt">⌀${avg}</td>
-      <td class="hs-fish" title="Spiele">🎮${games}</td>
     </tr>`;
   });
   return `
-    <div style="font-size:6px;color:#445566;margin-bottom:3px">🏆 BEST &nbsp;⌀ AVG &nbsp;🎮 SPIELE</div>
     <table class="hs-table">${rows}</table>`;
 }
 
@@ -687,6 +684,7 @@ function showNameInput() {
 
   const save=async()=>{
     const name=(input.value.trim()||'???').substring(0,10).toUpperCase();
+    localStorage.setItem('hansa_name',name);
     saveBtn.disabled=true;
     saveBtn.textContent='⏳ SPEICHERN...';
     const list=await addHighscore(name,score,heringsCaught);
@@ -718,6 +716,7 @@ function showGameOver(hsList,highlightName) {
     <button class="btn" id="restartBtn" style="margin-top:6px">↩ NOCHMAL!</button>
     <button class="btn" id="charBtn" style="font-size:8px;border-color:#004499;box-shadow:0 0 8px #003388;animation:none">🔄 CHARAKTER</button>
     <div style="font-size:6px;color:#334455;margin-top:4px">LEERTASTE / KLICK</div>
+    <div style="font-size:6px;color:#334455;margin-top:8px;cursor:pointer" id="resetLink">⚙ reset</div>
   `;
   ov.style.display='flex';
   const restartBtn=document.getElementById('restartBtn');
@@ -726,10 +725,21 @@ function showGameOver(hsList,highlightName) {
   const charBtn=document.getElementById('charBtn');
   charBtn.addEventListener('click',e=>{e.stopPropagation();if(!inputBlocked)showCharSelect();});
   charBtn.addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();if(!inputBlocked)showCharSelect();},{passive:false});
+  document.getElementById('resetLink').addEventListener('click',e=>{
+    e.stopPropagation();
+    const pw=prompt('Admin-Passwort:');
+    if(pw==='hansa1887'){
+      if(confirm('Bestenliste wirklich zurücksetzen?')){
+        fetch(BIN_URL,{method:'PUT',headers:{'Content-Type':'application/json','X-Access-Key':BIN_KEY},body:JSON.stringify({scores:[]})})
+          .then(()=>{ localStorage.removeItem('hansa_hs'); alert('✅ Bestenliste zurückgesetzt!'); showGameOver([],null); })
+          .catch(()=>alert('❌ Fehler beim Zurücksetzen'));
+      }
+    } else if(pw!==null) alert('❌ Falsches Passwort');
+  });
 }
 
 // ---- CHAR SELECT ----
-function showCharSelect() {
+async function showCharSelect() {
   gameState='charselect';
   const ov=document.getElementById('overlay');
   const makePreview=src=>{
@@ -738,12 +748,33 @@ function showCharSelect() {
     if(src) c.getContext('2d').drawImage(src,0,0,70,70);
     return c;
   };
+
+  // Personal stats
+  const myName=(localStorage.getItem('hansa_name')||'').toUpperCase();
+  let statsHtml='';
+  if(myName) {
+    const list=await loadHighscores();
+    const me=list.find(e=>e.name===myName);
+    if(me) {
+      const best=me.best??me.pts??0;
+      const avg=me.avg??best;
+      const games=me.games??1;
+      statsHtml=`<div style="font-size:7px;color:#aaccff;margin:6px 0 2px;text-shadow:0 0 5px #4499ff">DEINE STATS · ${myName}</div>
+      <div style="font-size:8px;color:#fff;margin-bottom:8px;display:flex;gap:12px;justify-content:center">
+        <span>🏆 <span style="color:#ffff88">${best}</span></span>
+        <span>⌀ <span style="color:#88aadd">${avg}</span></span>
+        <span>🎮 <span style="color:#88ffaa">${games}</span></span>
+      </div>`;
+    }
+  }
+
   ov.innerHTML=`
     <div style="font-size:18px;margin-bottom:6px">🐟🔵⚪🔴</div>
     <div style="font-size:14px;color:#fff;text-shadow:0 0 15px #0055dd;line-height:1.5;margin-bottom:3px">
       HANSA<br><span style="color:#ee2222;text-shadow:0 0 15px #ee2222">HERING</span>
     </div>
     <div style="font-size:7px;color:#aaccff;margin:5px 0 8px;text-shadow:0 0 5px #4499ff">~ UNTERWASSER EDITION ~</div>
+    ${statsHtml}
     <div style="font-size:8px;color:#fff;margin-bottom:8px;text-shadow:0 0 8px #4499ff">WÄHLE DEINEN CHARAKTER:</div>
     <div class="char-select">
       <div class="char-card selected" id="cardFace" onclick="selectChar('face')">
@@ -759,6 +790,7 @@ function showCharSelect() {
     </div>
     <button class="btn" id="startBtn" style="margin-top:8px">🐟 ANSTOSS!</button>
     <div style="font-size:6px;color:#334455;margin-top:5px">LEERTASTE / KLICK / TOUCH</div>
+    <div style="font-size:10px;color:#223;margin-top:10px;cursor:pointer;user-select:none" id="resetLink">⚙</div>
   `;
   ov.style.display='flex';
   document.getElementById('previewFace').appendChild(makePreview(faceCanvas));
@@ -768,6 +800,17 @@ function showCharSelect() {
   startBtn.addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();startGame();},{passive:false});
   document.getElementById('cardFace').addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();selectChar('face');},{passive:false});
   document.getElementById('cardShip').addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();selectChar('ship');},{passive:false});
+  document.getElementById('resetLink').addEventListener('click',e=>{
+    e.stopPropagation();
+    const pw=prompt('Admin-Passwort:');
+    if(pw==='hansa1887'){
+      if(confirm('Bestenliste wirklich zurücksetzen?')){
+        fetch(BIN_URL,{method:'PUT',headers:{'Content-Type':'application/json','X-Access-Key':BIN_KEY},body:JSON.stringify({scores:[]})})
+          .then(()=>{ localStorage.removeItem('hansa_hs'); alert('✅ Bestenliste zurückgesetzt!'); showCharSelect(); })
+          .catch(()=>alert('❌ Fehler beim Zurücksetzen'));
+      }
+    } else if(pw!==null) alert('❌ Falsches Passwort');
+  });
 }
 
 function selectChar(which) {
