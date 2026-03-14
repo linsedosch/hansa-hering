@@ -716,7 +716,11 @@ function showCharSelect() {
   ov.style.display='flex';
   document.getElementById('previewFace').appendChild(makePreview(faceCanvas));
   document.getElementById('previewShip').appendChild(makePreview(shipCanvas));
-  document.getElementById('startBtn').addEventListener('click',e=>{e.stopPropagation();startGame();});
+  const startBtn=document.getElementById('startBtn');
+  startBtn.addEventListener('click',e=>{e.stopPropagation();startGame();});
+  startBtn.addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();startGame();},{passive:false});
+  document.getElementById('cardFace').addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();selectChar('face');},{passive:false});
+  document.getElementById('cardShip').addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();selectChar('ship');},{passive:false});
 }
 
 function selectChar(which) {
