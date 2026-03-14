@@ -219,7 +219,15 @@ function checkIsTop5(pts) {
 }
 function addHighscore(name,pts) {
   const list=loadHighscores();
-  list.push({name,pts,date:new Date().toLocaleDateString("de-DE")});
+  const existing=list.find(e=>e.name===name);
+  if(existing) {
+    existing.games=(existing.games||1)+1;
+    existing.total=(existing.total||existing.pts)+pts;
+    existing.avg=Math.round(existing.total/existing.games*10)/10;
+    if(pts>existing.pts) existing.pts=pts;
+  } else {
+    list.push({name,pts,avg:pts,total:pts,games:1,date:new Date().toLocaleDateString('de-DE')});
+  }
   list.sort((a,b)=>b.pts-a.pts);
   list.splice(5);
   saveHighscores(list);
@@ -715,8 +723,12 @@ function showCharSelect() {
     const list=loadHighscores();
     const me=list.find(e=>e.name===myName);
     if(me) {
-      statsHtml=`<div style="font-size:7px;color:#aaccff;margin:6px 0 2px;text-shadow:0 0 5px #4499ff">DEIN BESTER · ${myName}</div>
-      <div style="font-size:10px;color:#ffff88;margin-bottom:8px">🏆 ${me.pts}</div>`;
+      statsHtml=`<div style="font-size:7px;color:#aaccff;margin:6px 0 2px;text-shadow:0 0 5px #4499ff">DEINE STATS · ${myName}</div>
+      <div style="font-size:8px;color:#fff;margin-bottom:8px;display:flex;gap:10px;justify-content:center">
+        <span>🏆 <span style="color:#ffff88">${me.pts}</span></span>
+        <span>⌀ <span style="color:#88aadd">${me.avg||me.pts}</span></span>
+        <span>🎮 <span style="color:#88ffaa">${me.games||1}</span></span>
+      </div>`;
     }
   }
 
