@@ -206,47 +206,23 @@ function playHansaFanfare() {
     setTimeout(()=>playBeep(f,0.12,'square',0.15),t*1000));
 }
 
-// ---- HIGHSCORES (global via JSONBin) ----
-const BIN_ID='69b54d64aa77b81da9e3a483';
-const BIN_KEY='$2a$10$0Xjlmnh3ksJ0aReQaBl0GOGq04W5aV9I7ciwio3MBUhnNCk7RfT6G';
-const BIN_URL=`https://api.jsonbin.io/v3/b/${BIN_ID}`;
-
-async function loadHighscores() {
-  const ctrl=new AbortController();
-  const t=setTimeout(()=>ctrl.abort(),6000);
-  try {
-    const res=await fetch(BIN_URL+'/latest',{headers:{'X-Access-Key':BIN_KEY},signal:ctrl.signal});
-    const data=await res.json();
-    return data.record.scores||[];
-  } catch(e) { return []; }
-  finally { clearTimeout(t); }
+// ---- HIGHSCORES (lokal) ----
+function loadHighscores() {
+  try { return JSON.parse(localStorage.getItem("hansa_hs")||"[]"); } catch(e) { return []; }
 }
-
-async function saveHighscores(list) {
-  const ctrl=new AbortController();
-  const t=setTimeout(()=>ctrl.abort(),6000);
-  try {
-    await fetch(BIN_URL,{
-      method:'PUT',
-      headers:{'Content-Type':'application/json','X-Access-Key':BIN_KEY},
-      body:JSON.stringify({scores:list}),
-      signal:ctrl.signal
-    });
-  } catch(e) { console.warn('save failed',e); }
-  finally { clearTimeout(t); }
+function saveHighscores(list) {
+  try { localStorage.setItem("hansa_hs",JSON.stringify(list)); } catch(e) {}
 }
-
-async function checkIsTop5(pts) {
-  const list=await loadHighscores();
+function checkIsTop5(pts) {
+  const list=loadHighscores();
   return list.length<5 || pts>list[list.length-1].pts;
 }
-
-async function addHighscore(name,pts) {
-  const list=await loadHighscores();
-  list.push({name,pts,date:new Date().toLocaleDateString('de-DE')});
+function addHighscore(name,pts) {
+  const list=loadHighscores();
+  list.push({name,pts,date:new Date().toLocaleDateString("de-DE")});
   list.sort((a,b)=>b.pts-a.pts);
   list.splice(5);
-  await saveHighscores(list);
+  saveHighscores(list);
   return list;
 }
 
@@ -615,11 +591,10 @@ function update() {
     spawnParticles(player.x,player.y,['#ee2222','#ffffff','#0055dd'],20);
     playDeath();
     inputBlocked=true;
-    setTimeout(async()=>{
+    setTimeout(()=>{
       inputBlocked=false;
-      const top=await checkIsTop5(score);
-      if(top) showNameInput();
-      else showGameOver(await loadHighscores(), null);
+      if(checkIsTop5(score)) showNameInput();
+      else showGameOver(loadHighscores(), null);
     },2000);
   }
 }
@@ -668,17 +643,11 @@ function showNameInput() {
   // Auto-focus input (slight delay for mobile)
   setTimeout(()=>input.focus(),100);
 
-  const save=async()=>{
+  const save=()=>{
     const name=(input.value.trim()||'???').substring(0,10).toUpperCase();
     localStorage.setItem('hansa_name',name);
-    saveBtn.disabled=true;
-    saveBtn.textContent='⏳...';
-    try {
-      const list=await addHighscore(name,score);
-      showGameOver(list,name);
-    } catch(e) {
-      showGameOver([],name);
-    }
+    const list=addHighscore(name,score);
+    showGameOver(list,name);
   };
 
   saveBtn.addEventListener('click',e=>{e.stopPropagation();save();});
@@ -720,16 +689,16 @@ function showGameOver(hsList,highlightName) {
     const pw=prompt('Admin-Passwort:');
     if(pw==='hansa1887'){
       if(confirm('Bestenliste wirklich zurücksetzen?')){
-        fetch(BIN_URL,{method:'PUT',headers:{'Content-Type':'application/json','X-Access-Key':BIN_KEY},body:JSON.stringify({scores:[]})})
-          .then(()=>{ localStorage.removeItem('hansa_hs'); alert('✅ Bestenliste zurückgesetzt!'); showGameOver([],null); })
-          .catch(()=>alert('❌ Fehler beim Zurücksetzen'));
+        localStorage.removeItem('hansa_hs');
+        alert('✅ Bestenliste zurückgesetzt!');
+        showGameOver([],null);
       }
     } else if(pw!==null) alert('❌ Falsches Passwort');
   });
 }
 
 // ---- CHAR SELECT ----
-async function showCharSelect() {
+function showCharSelect() {
   gameState='charselect';
   const ov=document.getElementById('overlay');
   const makePreview=src=>{
@@ -743,18 +712,11 @@ async function showCharSelect() {
   const myName=(localStorage.getItem('hansa_name')||'').toUpperCase();
   let statsHtml='';
   if(myName) {
-    const list=await loadHighscores();
+    const list=loadHighscores();
     const me=list.find(e=>e.name===myName);
     if(me) {
-      const best=me.best??me.pts??0;
-      const avg=me.avg??best;
-      const games=me.games??1;
-      statsHtml=`<div style="font-size:7px;color:#aaccff;margin:6px 0 2px;text-shadow:0 0 5px #4499ff">DEINE STATS · ${myName}</div>
-      <div style="font-size:8px;color:#fff;margin-bottom:8px;display:flex;gap:12px;justify-content:center">
-        <span>🏆 <span style="color:#ffff88">${best}</span></span>
-        <span>⌀ <span style="color:#88aadd">${avg}</span></span>
-        <span>🎮 <span style="color:#88ffaa">${games}</span></span>
-      </div>`;
+      statsHtml=`<div style="font-size:7px;color:#aaccff;margin:6px 0 2px;text-shadow:0 0 5px #4499ff">DEIN BESTER · ${myName}</div>
+      <div style="font-size:10px;color:#ffff88;margin-bottom:8px">🏆 ${me.pts}</div>`;
     }
   }
 
@@ -795,9 +757,9 @@ async function showCharSelect() {
     const pw=prompt('Admin-Passwort:');
     if(pw==='hansa1887'){
       if(confirm('Bestenliste wirklich zurücksetzen?')){
-        fetch(BIN_URL,{method:'PUT',headers:{'Content-Type':'application/json','X-Access-Key':BIN_KEY},body:JSON.stringify({scores:[]})})
-          .then(()=>{ localStorage.removeItem('hansa_hs'); alert('✅ Bestenliste zurückgesetzt!'); showCharSelect(); })
-          .catch(()=>alert('❌ Fehler beim Zurücksetzen'));
+        localStorage.removeItem('hansa_hs');
+        alert('✅ Bestenliste zurückgesetzt!');
+        showCharSelect();
       }
     } else if(pw!==null) alert('❌ Falsches Passwort');
   });
