@@ -207,56 +207,45 @@ function playHansaFanfare() {
 }
 
 // ---- HIGHSCORES (global via JSONBin) ----
-const BIN_ID='69b541a1c3097a1dd52459c3';
+const BIN_ID='69b54d64aa77b81da9e3a483';
 const BIN_KEY='$2a$10$0Xjlmnh3ksJ0aReQaBl0GOGq04W5aV9I7ciwio3MBUhnNCk7RfT6G';
 const BIN_URL=`https://api.jsonbin.io/v3/b/${BIN_ID}`;
 
 async function loadHighscores() {
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),6000);
   try {
-    const res=await fetch(BIN_URL+'/latest',{headers:{'X-Access-Key':BIN_KEY}});
+    const res=await fetch(BIN_URL+'/latest',{headers:{'X-Access-Key':BIN_KEY},signal:ctrl.signal});
     const data=await res.json();
-    const list=data.record.scores||[];
-    localStorage.setItem('hansa_hs',JSON.stringify(list)); // local cache
-    return list;
-  } catch(e) {
-    try { return JSON.parse(localStorage.getItem('hansa_hs')||'[]'); } catch(e2) { return []; }
-  }
+    return data.record.scores||[];
+  } catch(e) { return []; }
+  finally { clearTimeout(t); }
 }
 
 async function saveHighscores(list) {
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),6000);
   try {
     await fetch(BIN_URL,{
       method:'PUT',
       headers:{'Content-Type':'application/json','X-Access-Key':BIN_KEY},
-      body:JSON.stringify({scores:list})
+      body:JSON.stringify({scores:list}),
+      signal:ctrl.signal
     });
-    localStorage.setItem('hansa_hs',JSON.stringify(list));
-  } catch(e) {
-    try { localStorage.setItem('hansa_hs',JSON.stringify(list)); } catch(e2) {}
-  }
+  } catch(e) { console.warn('save failed',e); }
+  finally { clearTimeout(t); }
 }
 
-async function isTop5(pts) {
+async function checkIsTop5(pts) {
   const list=await loadHighscores();
-  return list.length<10 || pts>(list[list.length-1].best??list[list.length-1].pts??0);
+  return list.length<5 || pts>list[list.length-1].pts;
 }
 
-async function addHighscore(name,pts,fish) {
+async function addHighscore(name,pts) {
   const list=await loadHighscores();
-  const existing=list.find(e=>e.name===name);
-  if(existing) {
-    existing.games=(existing.games??1)+1;
-    const prevBest=existing.best??existing.pts??0;
-    existing.totalPts=(existing.totalPts??prevBest)+pts;
-    existing.avg=Math.round(existing.totalPts/existing.games*10)/10;
-    if(pts>prevBest){ existing.best=pts; existing.fish=fish; existing.date=new Date().toLocaleDateString('de-DE'); }
-    else { existing.best=prevBest; }
-    delete existing.pts; // migrate old field
-  } else {
-    list.push({name,best:pts,avg:pts,totalPts:pts,games:1,fish,date:new Date().toLocaleDateString('de-DE')});
-  }
-  list.sort((a,b)=>b.best-a.best);
-  list.splice(10);
+  list.push({name,pts,date:new Date().toLocaleDateString('de-DE')});
+  list.sort((a,b)=>b.pts-a.pts);
+  list.splice(5);
   await saveHighscores(list);
   return list;
 }
@@ -628,7 +617,7 @@ function update() {
     inputBlocked=true;
     setTimeout(async()=>{
       inputBlocked=false;
-      const top=await isTop5(score);
+      const top=await checkIsTop5(score);
       if(top) showNameInput();
       else showGameOver(await loadHighscores(), null);
     },2000);
@@ -649,17 +638,14 @@ function renderHSTable(list,highlightName) {
   let rows='';
   list.forEach((e,i)=>{
     const isNew=e.name===highlightName;
-    const best=e.best??e.pts??'?';
-    const avg=e.avg??e.pts??'?';
-    const games=e.games??1;
+    const pts=e.pts??'?';
     rows+=`<tr>
       <td class="hs-rank">#${i+1}</td>
       <td class="hs-name ${isNew?'hs-new':''}">${e.name}</td>
-      <td class="hs-pts ${isNew?'hs-new':''}" title="Bestes Spiel">🏆${best}</td>
+      <td class="hs-pts ${isNew?'hs-new':''}">${pts}</td>
     </tr>`;
   });
-  return `
-    <table class="hs-table">${rows}</table>`;
+  return `<table class="hs-table">${rows}</table>`;
 }
 
 // ---- NAME INPUT SCREEN ----
@@ -686,9 +672,13 @@ function showNameInput() {
     const name=(input.value.trim()||'???').substring(0,10).toUpperCase();
     localStorage.setItem('hansa_name',name);
     saveBtn.disabled=true;
-    saveBtn.textContent='⏳ SPEICHERN...';
-    const list=await addHighscore(name,score,heringsCaught);
-    showGameOver(list,name);
+    saveBtn.textContent='⏳...';
+    try {
+      const list=await addHighscore(name,score);
+      showGameOver(list,name);
+    } catch(e) {
+      showGameOver([],name);
+    }
   };
 
   saveBtn.addEventListener('click',e=>{e.stopPropagation();save();});
